@@ -9,6 +9,7 @@ import {
 
 export class GeminiAdapter implements LLMAdapter {
   private client: GoogleGenAI;
+  private previousInteractionId?: string;
 
   constructor() {
     this.client = new GoogleGenAI({
@@ -27,12 +28,24 @@ export class GeminiAdapter implements LLMAdapter {
       parameters: tool.parameters,
     }));
 
-    const response = await this.client.interactions.create({
+    const request: Record<string, unknown> = {
       model: "gemini-3.8-flash",
-      input,
       tools: functionTools,
-      store: false,
-    });
+      input,
+    };
+
+    // Continue the existing Gemini interaction when available.
+    if (this.previousInteractionId) {
+      request.previous_interaction_id =
+        this.previousInteractionId;
+    }
+    
+    const response =
+      await this.client.interactions.create(request as any);
+
+    // Save this interaction so the next tool result
+    // can continue from the correct Gemini state.
+    this.previousInteractionId = response.id;
 
     const toolCalls: LLMResponse["toolCalls"] = [];
 
@@ -49,7 +62,10 @@ export class GeminiAdapter implements LLMAdapter {
     return {
       text: response.output_text,
       toolCalls,
-      providerState: response.steps,
+      providerState: {
+        interactionId: response.id,
+        steps: response.steps,
+      },
     };
   }
 }

@@ -1,7 +1,7 @@
 import "dotenv/config";
 
 import { createLLMAdapter } from "./llm/index.js";
-import { ToolDefinition, LLMMessage } from "./llm/types.js";
+import { ToolDefinition } from "./llm/types.js";
 import { listFiles } from "./tools/listFiles.js";
 import { readFile } from "./tools/readFile.js";
 
@@ -59,12 +59,7 @@ async function executeTool(
   }
 }
 async function runAgent(task: string) {
-  const messages: LLMMessage[] = [
-    {
-      role: "user",
-      content: task,
-    },
-  ];
+  let input: unknown = task;
 
   const maxIterations = 5;
 
@@ -72,7 +67,7 @@ async function runAgent(task: string) {
     console.log(`\n--- Agent iteration ${iteration + 1} ---`);
 
     const response = await adapter.generate(
-      messages,
+      input,
       toolDefinitions
     );
 
@@ -81,6 +76,8 @@ async function runAgent(task: string) {
       console.log(response.text);
       return;
     }
+
+    const functionResults = [];
 
     for (const toolCall of response.toolCalls) {
       console.log("\nTool call:");
@@ -95,20 +92,20 @@ async function runAgent(task: string) {
       console.log("\nTool result:");
       console.log(result);
 
-      messages.push({
-        role: "assistant",
-        content: JSON.stringify({
-          toolCall,
-        }),
-      });
-
-      messages.push({
-        role: "tool",
-        content: JSON.stringify(result),
-        toolCallId: toolCall.id,
-        toolName: toolCall.name,
+      functionResults.push({
+        type: "function_result",
+        name: toolCall.name,
+        call_id: toolCall.id,
+        result: [
+          {
+            type: "text",
+            text: JSON.stringify(result),
+          },
+        ],
       });
     }
+
+    input = functionResults;
   }
 
   throw new Error(
