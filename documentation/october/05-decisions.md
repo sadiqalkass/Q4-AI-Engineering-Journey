@@ -99,3 +99,28 @@ The Q4 Journey is both an engineering project and a build-in-public documentatio
 ### Status
 
 Accepted
+
+Decision 006 — Provider-Agnostic LLM Architecture
+
+Date: October 8, 2026
+
+Decision:
+The Autonomous Engineering Agent will use a provider-agnostic
+LLM adapter layer instead of coupling the agent directly to a
+single model provider.
+
+Initial providers:
+- Gemini
+- OpenAI
+- Groq
+
+Reason:
+The agent's reasoning loop, tool execution, state management,
+and safety controls should remain independent of the underlying
+LLM provider.
+
+This allows providers to be changed or compared without
+rewriting the core agent architecture.
+
+Status:
+Proposed → validate through implementation

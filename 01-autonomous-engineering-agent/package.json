@@ -1,0 +1,26 @@
+{
+  "name": "01-autonomous-engineering-agent",
+  "version": "1.0.0",
+  "description": "> Part of the Q4 AI Engineering Journey — October 2026",
+  "main": "index.js",
+  "scripts": {
+    "dev": "tsx src/agent.ts",
+    "build": "tsc",
+    "start": "node dist/agent.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@google/genai": "^2.28.0",
+    "dotenv": "^18.0.6",
+    "groq-sdk": "^1.6.0",
+    "openai": "^7.30.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
