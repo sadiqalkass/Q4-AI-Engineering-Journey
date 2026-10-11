@@ -29,7 +29,7 @@ export class GeminiAdapter implements LLMAdapter {
     }));
 
     const request: Record<string, unknown> = {
-      model: "gemini-3.8-flash",
+      model: "gemini-3.6-flash",
       tools: functionTools,
       input,
     };

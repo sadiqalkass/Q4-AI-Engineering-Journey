@@ -124,3 +124,89 @@ rewriting the core agent architecture.
 
 Status:
 Proposed → validate through implementation
+
+---
+
+## October 10, 2026
+
+### Decision 007 — Implement the Core Agent Loop Before Adopting an Orchestration Framework
+
+**Decision**
+
+The initial Autonomous Engineering Agent will use a custom TypeScript agent loop to manage model interactions, tool execution, and iteration.
+
+A dedicated orchestration framework will not be introduced until the core mechanics are better understood and the project's requirements justify it.
+
+**Reason**
+
+Building the core loop directly provides an opportunity to understand how an agent coordinates reasoning, tool calls, execution results, and subsequent model responses.
+
+It also allows us to identify limitations and reliability issues before introducing additional abstractions.
+
+**Implementation Notes**
+
+- The agent loop is implemented in `src/agent.ts`.
+- Gemini is the current model provider.
+- The agent can interact with the codebase through tools such as `list_files`, `read_file`, and `search_code`.
+- The current implementation uses an iteration limit to bound the agent loop.
+
+**Status**
+
+Accepted — implementation in progress.
+
+---
+
+### Decision 008 — Detect and Prevent Duplicate Tool Calls
+
+**Decision**
+
+The agent will detect repeated tool calls with the same tool name and equivalent arguments within a single run.
+
+When an identical tool call is detected again, the agent will skip its execution and return a structured error with guidance to try a different approach.
+
+**Reason**
+
+During testing, the agent attempted to repeat the same search operation. Repeated calls can waste API requests, consume available quota, and prevent the agent from making meaningful progress.
+
+The duplicate-call guard provides a deterministic safeguard instead of relying exclusively on instructions in the model prompt.
+
+**Implementation Notes**
+
+- Tool-call arguments are normalized before generating a comparison key.
+- Previously executed tool-call keys are tracked during the agent run.
+- Duplicate calls are skipped and reported to the agent.
+- A manual smoke test confirmed that the first search executed and the repeated search was skipped.
+
+**Limitations**
+
+The current implementation detects identical tool names and normalized arguments. It does not detect every possible form of repetitive behavior, such as different searches that produce the same result.
+
+An automated regression test is still required.
+
+**Status**
+
+Implemented — manual smoke test passed; automated regression testing pending.
+
+---
+
+### Decision 009 — Treat Model Instructions and Programmatic Guardrails Separately
+
+**Decision**
+
+Important operational limits and safety requirements must be enforced by application code where possible, rather than relying only on instructions included in the model prompt.
+
+**Reason**
+
+During testing, the model continued making tool calls beyond the requested task-specific iteration budget. This demonstrated that a prompt instruction alone cannot guarantee compliance with an operational limit.
+
+**Implementation Notes**
+
+- The agent currently has a code-level maximum iteration setting.
+- Task-specific iteration budgets need to be enforced explicitly if they differ from the global maximum.
+- Error handling, argument validation, and filesystem access restrictions remain part of the ongoing reliability and safety work.
+
+**Status**
+
+Accepted — further implementation and testing required.
+
+---
