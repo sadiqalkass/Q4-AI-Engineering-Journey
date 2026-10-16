@@ -5,6 +5,7 @@ import { ToolDefinition } from "./llm/types.js";
 import { listFiles } from "./tools/listFiles.js";
 import { readFile } from "./tools/readFile.js";
 import { searchCode } from "./tools/searchCode.js";
+import { runAgent } from "./agentRunner.js";
 
 const adapter = createLLMAdapter();
 
@@ -27,37 +28,37 @@ const toolDefinitions: ToolDefinition[] = [
     },
   },
   {
-  name: "read_file",
-  description:
-    "Read the contents of a specific text file.",
-  parameters: {
-    type: "object",
-    properties: {
-      filePath: {
-        type: "string",
-        description: "The path of the file to read.",
+    name: "read_file",
+    description:
+      "Read the contents of a specific text file.",
+    parameters: {
+      type: "object",
+      properties: {
+        filePath: {
+          type: "string",
+          description: "The path of the file to read.",
+        },
       },
+      required: ["filePath"],
+      additionalProperties: false,
     },
-    required: ["filePath"],
-    additionalProperties: false,
   },
-},
-{
-  name: "search_code",
-  description:
-    "Search project source files for a text query. Returns matching file paths, line numbers, and snippets.",
-  parameters: {
-    type: "object",
-    properties: {
-      query: {
-        type: "string",
-        description: "Text or identifier to search for.",
+  {
+    name: "search_code",
+    description:
+      "Search project source files for a text query. Returns matching file paths, line numbers, and snippets.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Text or identifier to search for.",
+        },
       },
+      required: ["query"],
+      additionalProperties: false,
     },
-    required: ["query"],
-    additionalProperties: false,
   },
-},
 ];
 
 async function executeTool(
@@ -80,124 +81,135 @@ async function executeTool(
 }
 
 
-function getToolCallKey(
-  name: string,
-  args: Record<string, unknown>
-): string {
-  const normalizedArgs = Object.fromEntries(
-    Object.entries(args).sort(([a], [b]) => a.localeCompare(b))
-  );
+// function getToolCallKey(
+//   name: string,
+//   args: Record<string, unknown>
+// ): string {
+//   const normalizedArgs = Object.fromEntries(
+//     Object.entries(args).sort(([a], [b]) => a.localeCompare(b))
+//   );
 
-  return `${name}:${JSON.stringify(normalizedArgs)}`;
-}
+//   return `${name}:${JSON.stringify(normalizedArgs)}`;
+// }
 
-async function runAgent(task: string) {
-  let input: unknown = task;
 
-  const maxIterations = 8;
-  const seenToolCalls = new Set<string>();
+// async function runAgent(task: string) {
+//   let input: unknown = task;
+//   let providerState: unknown;
 
-  for (let iteration = 0; iteration < maxIterations; iteration++) {
-    console.log(`\n--- Agent iteration ${iteration + 1} ---`);
+//   const maxIterations = 8;
+//   const seenToolCalls = new Set<string>();
 
-    const response = await adapter.generate(
-      input,
-      toolDefinitions
-    );
+//   for (let iteration = 0; iteration < maxIterations; iteration++) {
+//     console.log(`\n--- Agent iteration ${iteration + 1} ---`);
 
-    if (response.toolCalls.length === 0) {
-      console.log("\nAgent:\n");
-      console.log(response.text);
-      return;
-    }
+//     const response = await adapter.generate(
+//       input,
+//       toolDefinitions,
+//       providerState
+//     );
 
-    const functionResults = [];
+//     providerState = response.providerState;
 
-    for (const toolCall of response.toolCalls) {
-      console.log("\nTool call:");
-      console.log(toolCall.name);
-      console.log(toolCall.arguments);
+//     if (response.toolCalls.length === 0) {
+//       console.log("\nAgent:\n");
+//       console.log(response.text);
+//       return;
+//     }
 
-      const callKey = getToolCallKey(
-        toolCall.name,
-        toolCall.arguments
-      );
+//     const functionResults = [];
 
-      let result: unknown;
+//     for (const toolCall of response.toolCalls) {
+//       console.log("\nTool call:");
+//       console.log(toolCall.name);
+//       console.log(toolCall.arguments);
 
-      if (seenToolCalls.has(callKey)) {
-        console.warn(
-          "\nDuplicate tool call detected. Skipping execution."
-        );
+//       const callKey = getToolCallKey(
+//         toolCall.name,
+//         toolCall.arguments
+//       );
 
-        result = {
-          error: "Duplicate tool call detected. This exact tool call has already been executed.",
-          suggestion:
-            "Use the previous results, inspect a different file, or try a different search query."
-        };
-      } else {
-        seenToolCalls.add(callKey);
+//       let result: unknown;
 
-       
-let result: unknown;
+//       if (seenToolCalls.has(callKey)) {
+//         console.warn(
+//           "\nDuplicate tool call detected. Skipping execution."
+//         );
 
-try {
-  result = await executeTool(
-    toolCall.name,
-    toolCall.arguments
-  );
-} catch (error) {
-  const message =
-    error instanceof Error
-      ? error.message
-      : "An unexpected tool error occurred.";
+//         result = {
+//           error:
+//             "Duplicate tool call detected. This exact tool call has already been executed.",
+//           suggestion:
+//             "Use previous results or try a different search query.",
+//         };
+//       } else {
+//         seenToolCalls.add(callKey);
 
-  console.error(`Tool "${toolCall.name}" failed:`, message);
+//         try {
+//           result = await executeTool(
+//             toolCall.name,
+//             toolCall.arguments
+//           );
+//         } catch (error) {
+//           const message =
+//             error instanceof Error
+//               ? error.message
+//               : "An unexpected tool error occurred.";
 
-  result = {
-    error: message,
-    tool: toolCall.name,
-    suggestion:
-      "Review the error, correct the arguments or path if necessary, and try a different approach.",
-  };
-}
+//           console.error(
+//             `Tool "${toolCall.name}" failed:`,
+//             message
+//           );
 
-      }
+//           result = {
+//             error: message,
+//             tool: toolCall.name,
+//             suggestion:
+//               "Review the error and try a different approach.",
+//           };
+//         }
+//       }
 
-      console.log("\nTool result:");
-      console.log(result);
+//       console.log("\nTool result:");
+//       console.log(result);
 
-      functionResults.push({
-        type: "function_result",
-        name: toolCall.name,
-        call_id: toolCall.id,
-        result: [
-          {
-            type: "text",
-            text: JSON.stringify(result),
-          },
-        ],
-      });
-    }
+//       functionResults.push({
+//         type: "function_result",
+//         name: toolCall.name,
+//         call_id: toolCall.id,
+//         result: [
+//           {
+//             type: "text",
+//             text: JSON.stringify(result),
+//           },
+//         ],
+//       });
+//     }
 
-    input = functionResults;
-  }
+//     input = functionResults;
+//   }
 
-  throw new Error(
-    "Agent stopped because maximum iterations were reached."
-  );
-}
+//   console.warn(
+//     `Agent reached its maximum of ${maxIterations} iterations.`
+//   );
 
+//   console.warn(
+//     "The task may be incomplete. Review the results before considering it finished."
+//   );
+// }
 
 
 runAgent(
   `This is a test of duplicate tool-call detection.
-
   1. Call search_code with query "jwt".
   2. Call search_code again with the exact same arguments.
   3. Do not call any other tools.
-  4. After receiving the results, explain whether the duplicate call was skipped.`
+  4. After receiving the results, explain whether the duplicate call was skipped.`,
+  adapter,
+  toolDefinitions,
+  executeTool
 ).catch((error) => {
   console.error("\nAgent failed:");
   console.error(error);
 });
+

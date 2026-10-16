@@ -1,714 +1,277 @@
 # Blockers and Open Questions
 
-## Current Status
-
-Implementation of the Autonomous Engineering Agent has started.
-
-The project has progressed from architecture planning into the implementation and testing of the core agent loop. Several original architecture questions have been partially answered through implementation, while other capabilities remain planned or under investigation.
-
-Current areas requiring attention include:
-
-- Reliable handling of tool execution errors.
-
-- Enforcement of iteration limits.
-
-- Validation of tool arguments and filesystem access.
-
-- Automated testing of duplicate tool-call detection.
-
-- Managing the Gemini API free-tier request quota during development.
-
-## Current Implementation Status — October 10, 2026
-
-1. Core Agent Loop
-
-Status: Implemented; further validation required.
-
-The agent has an iterative model interaction loop in src/agent.ts. It can receive tool calls, execute supported tools, and return their results to the model.
-
-2. Codebase Inspection Tools
-
-Status: Implemented; security validation pending.
-
-The current tools include:
-
-list_files — lists files in the codebase.
-
-read_file — reads file contents.
-
-search_code — searches code for a query.
-
-Filesystem access boundaries and input validation still need to be reviewed and tested.
-
-3. LLM Provider Architecture
-
-Status: Partially implemented.
-
-Gemini is the current provider. Provider adapter files for Gemini, OpenAI, and Groq exist in the project, but the alternative adapters have not yet been fully verified.
-
-Further provider validation is deferred until the current Week 2 reliability work is completed.
-
-4. Duplicate Tool-Call Detection
-
-Status: Implemented; automated regression test pending.
-
-A duplicate-call guard was added to prevent an identical tool name and argument combination from executing repeatedly during a single agent run.
-
-A manual smoke test confirmed the expected behavior.
-
-5. Iteration Limits
-
-Status: Partially addressed.
-
-The agent currently uses a code-level maximum of eight iterations. Testing showed that the model did not consistently follow a lower task-specific iteration budget supplied through instructions.
-
-The implementation needs to enforce task-specific budgets in code where required and define how partial findings should be returned when the limit is reached.
-
-6. Tool Error Handling
-
-Status: Pending validation.
-
-Tool execution errors need to be handled consistently. The agent should receive a structured error result where appropriate, allowing it to recover or explain the failure instead of unexpectedly terminating the run.
-
-7. API Quota
-
-Status: Temporary development constraint.
-
-A Gemini API request returned a 429 quota error during testing. This interrupted further model-based validation.
-
-Development can continue on documentation, deterministic tests, code review, and other work that does not require additional model requests.
-
-The exact quota reset time and available request allowance should be verified before resuming API-based testing.
-
-
-
-# 1. Agent Architecture
-
-### Question
-
-Should the system use:
-
-- A single agent with multiple tools?
-- Multiple specialized agents?
-- A graph-based workflow?
-- A hybrid approach?
-
-### Status
-
-Open
+**Project:** Autonomous Engineering Agent  
+**Last Updated:** October 16, 2026  
+**Current Phase:** Week 3 — Tool Use, Orchestration, and Documentation  
+**Overall Status:** Core components implemented and tested; full end-to-end agent workflow still in progress.
 
 ---
 
-# 2. Orchestration
+## 1. Current Status
 
-### Question
+The Autonomous Engineering Agent has progressed from initial architecture planning into implementation, testing, and orchestration.
 
-Which orchestration approach should be used?
+The current implementation includes:
 
-Potential technologies include:
+- A provider-agnostic LLM adapter interface.
+- A Gemini adapter and a mock adapter for development and testing.
+- An agent runner that manages tool calls, provider state, iteration limits, and execution results.
+- Codebase-inspection tools: `list_files`, `read_file`, and `search_code`.
+- In-memory agent memory for tracking tool results during a run.
+- Orchestration interfaces for the Planner, Researcher, Coder, and Reviewer.
+- A revision loop that allows the Coder to revise a proposal based on review feedback.
+- A Planner implementation that validates model output and parses a non-empty plan from JSON.
+- Automated tests covering runner behavior, memory, orchestration, revision handling, and planner validation.
 
-- LangGraph
-- CrewAI
-- Custom orchestration
+The latest reported verification results are:
 
-### Status
+- **Build:** Passed.
+- **Automated tests:** 20 passed.
 
-Research Required
+These results confirm the current tested components work under the tested conditions. They do not yet establish that the complete system can autonomously implement, execute, and securely validate a software-engineering task end to end.
 
----
+## 2. Current Implementation Status
 
-# 3. LLM Provider
+### 2.1 Core Agent Runner
 
-### Question
+**Status:** Implemented and tested.
 
-Which LLM API will provide the reasoning capability?
+The runner executes supported tool calls, tracks execution results, skips duplicate calls, handles tool failures, preserves provider state, and enforces an iteration limit.
 
-### Status
+**Remaining work:**
+- Expand tests for edge cases and unexpected provider responses.
+- Review how partial results are reported when execution reaches its limit.
+- Confirm all operational limits are enforced in application code.
 
-Research Required
+### 2.2 Codebase-Inspection Tools
 
----
+**Status:** Implemented; security validation remains open.
 
-# 4. Programming Language
+Available tools:
 
-### Question
+- `list_files` — lists files in the codebase.
+- `read_file` — reads file contents.
+- `search_code` — searches code for a query.
 
-Should the project primarily use:
+**Remaining work:**
+- Validate tool arguments and reject malformed inputs.
+- Test path traversal and attempts to access files outside the permitted project directory.
+- Review filesystem permissions and error responses.
 
-- Node.js
-- Python
-- A hybrid Node.js + Python architecture?
+### 2.3 LLM Provider Architecture
 
-### Status
+**Status:** Adapter abstraction implemented; live provider validation incomplete.
 
-Research Required
+The agent uses an `LLMAdapter` interface to separate model-provider integration from core agent logic. Gemini and mock adapters are present.
 
----
+The mock adapter supports deterministic local testing without requiring live model requests.
 
-# 5. Tool Calling
+**Remaining work:**
+- Validate the Gemini adapter when quota is available.
+- Verify provider-specific tool-call and state-handling behavior.
+- Implement and test additional providers only when needed.
 
-### Question
+OpenAI and Groq support should not be considered verified unless their adapters are implemented and tested.
 
-Should tools be implemented through:
+### 2.4 Duplicate Tool-Call Detection
 
-- Native model tool/function calling?
-- MCP?
-- A custom tool interface?
-- A combination?
+**Status:** Implemented and covered by automated tests.
 
-### Status
+The runner identifies repeated tool calls with the same tool name and equivalent arguments within a run. Duplicate calls are skipped rather than executed again.
 
-Research Required
+**Remaining work:**
+- Test additional edge cases involving argument normalization.
+- Consider broader loop-detection strategies if testing reveals a need.
 
----
+### 2.5 Iteration Limits
 
-# 6. MCP
+**Status:** Implemented and tested.
 
-### Question
+The runner enforces a maximum iteration limit, and automated tests confirm that it stops when the configured limit is reached.
 
-What role should MCP play in the project?
+**Remaining work:**
+- Define how the final result should communicate incomplete work.
+- Review whether different tasks require different execution budgets.
+- Add tests for any future task-specific limit configuration.
 
-Potential areas include standardized access to tools, resources, and external systems.
+### 2.6 Tool Error Handling
 
-### Status
+**Status:** Basic handling implemented and tested.
 
-Research Required
+The runner has a test confirming that it can continue after a tool throws an error.
 
----
+**Remaining work:**
+- Standardize error-result formats.
+- Test different failure types and malformed tool arguments.
+- Decide when a failure should trigger a retry, a different approach, or termination.
 
-# 7. Code Execution
+### 2.7 Agent Memory
 
-### Question
+**Status:** Basic in-memory implementation completed and tested.
 
-How can the agent safely execute code and commands?
+The current memory implementation supports storing, retrieving, updating, checking, and clearing records. The runner uses memory to avoid repeating tool calls.
 
-### Important Considerations
+**Limitations:**
+- Memory currently exists only in the running process and is not persistent across separate runs.
+- Long-term task memory and retrieval have not been implemented.
+- Memory retention, invalidation, and isolation policies remain to be defined.
 
-- Sandboxing
-- Permissions
-- Resource limits
-- Network access
-- Filesystem access
-- Command restrictions
+**Next action:** Define the memory requirements before introducing persistent storage or RAG.
 
-### Status
+### 2.8 Agent Orchestration
 
-Research Required
+**Status:** Core orchestration logic implemented and tested; complete agent implementations remain in progress.
 
----
+The orchestrator coordinates the Planner, Researcher, Coder, and Reviewer through a defined sequence. It also supports bounded revision when a review rejects a coding proposal.
 
-# 8. GitHub Integration
+The Planner implementation validates task input, rejects unexpected tool calls, and checks that the returned plan contains valid steps.
 
-### Question
+**Remaining work:**
+- Implement the Researcher, Coder, and Reviewer as working agents.
+- Connect the agent implementations to the orchestration flow.
+- Test the complete workflow using mock adapters and deterministic agents.
+- Verify revision behavior across multiple review attempts.
 
-How should the agent interact with repositories?
+The Tester and Security Reviewer remain planned responsibilities; they should not be described as fully implemented agents yet.
 
-Potential capabilities:
+### 2.9 Gemini API Quota
 
-```text
-Read repository
-Inspect files
-Create changes
-Review diff
-Create branch
-Commit changes
-Create pull request
-```
+**Status:** Temporary development constraint.
 
-### Status
+A Gemini API request previously returned a `429` quota error, limiting further live-model testing.
 
-Research Required
+**Impact:** Live provider validation may be delayed.
 
----
-
-# 9. Memory
-
-### Question
-
-What information needs to persist between agent steps or tasks?
-
-### Status
-
-Research Required
-
----
-
-# 10. RAG
-
-### Question
-
-Does the agent require retrieval-augmented generation?
-
-Potential sources could include:
-
-- Project documentation
-- Framework documentation
-- Technical references
-- Repository knowledge
-
-### Status
-
-Research Required
+**Next action:**
+- Continue using mock adapters and deterministic tests.
+- Resume live-model testing when quota is available.
+- Avoid unnecessary requests while the quota constraint remains unresolved.
 
 ---
 
-# 11. Human-in-the-Loop
+## 3. Current Blocker Summary
 
-### Question
+| ID | Issue | Status |
+|---|---|---|
+| B-001 | Gemini API quota | Temporarily blocked |
+| B-002 | Filesystem security and path validation | Open |
+| B-003 | Complete LLM-backed agent implementations | In progress |
+| B-004 | End-to-end orchestration integration | In progress |
+| B-005 | Persistent memory across runs | Not implemented |
+| B-006 | Standardized tool error and recovery policies | Partially implemented |
+| B-007 | Full evaluation and task-completion criteria | Open |
+| B-008 | MCP integration | Not implemented |
+| B-009 | Safe code and command execution | Open |
+| B-010 | GitHub operations by the agent | Future capability |
 
-Which actions should require human approval?
-
-Potential examples:
-
-- Executing sensitive commands
-- Modifying important files
-- External API actions
-- Git operations
-- Deployments
-
-### Status
-
-Research Required
-
----
-
-# 12. Evaluation
-
-### Question
-
-How will we determine whether the agent actually completed the engineering task successfully?
-
-Potential evaluation areas:
-
-```text
-Task completion
-Code correctness
-Test results
-Security
-Efficiency
-Tool usage
-Final output quality
-```
-
-### Status
-
-Research Required
+The previously outstanding automated regression tests for duplicate tool calls and basic iteration-limit behavior have now passed. Basic tool-error handling and in-memory memory behavior are also covered by tests.
 
 ---
 
-# 13. Guardrails
+## 4. Open Architecture Questions
 
-### Question
+### 4.1 Orchestration Framework
 
-How do we prevent unsafe or unintended behavior?
+**Current understanding:** The project uses a custom TypeScript orchestration implementation.
 
-### Status
+**Open question:** Would LangGraph, CrewAI, or another framework provide enough value to justify introducing it?
 
-Research Required
+**Next action:** Continue with the current implementation until concrete requirements demonstrate the need for another framework.
 
----
+### 4.2 MCP
 
-# 14. Observability
+**Current understanding:** The current tools use an application-defined tool interface. MCP has not yet been integrated.
 
-### Question
+**Open question:** Which external tools or resources would benefit from MCP?
 
-How will we see:
+**Next action:** Define a small MCP integration target and document tool discovery, permissions, and error handling before implementation.
 
-- Agent decisions
-- Tool calls
-- Tool results
-- Errors
-- Retries
-- State transitions
-- Final outcomes?
+### 4.3 Safe Code Execution
 
-### Status
+**Current understanding:** Codebase inspection is available, but safe execution of arbitrary commands and generated code has not been established.
 
-Research Required
+**Open question:** How should execution be isolated and restricted?
 
----
+**Next action:** Research sandboxing, filesystem boundaries, command restrictions, resource limits, and network access before adding execution capabilities.
 
-# Current Blocker Summary
+### 4.4 GitHub Integration
 
-## Current Implementation Blockers
+**Current understanding:** The agent can inspect a codebase through its available tools. Automated GitHub operations have not been established.
 
-### B-001 — Gemini API Quota
+**Open question:** Should the agent eventually create branches, modify files, review diffs, commit changes, or open pull requests?
 
-**Problem**
+**Next action:** Define permission boundaries and human-approval requirements before enabling write operations.
 
-The Gemini free-tier request limit interrupted a model-based test.
+### 4.5 Evaluation
 
-**Impact**
+**Current understanding:** Automated tests validate individual components, but a complete task-level evaluation strategy is not yet established.
 
-Further live testing may be delayed until quota becomes available.
+**Open question:** How will the system determine whether an engineering task was completed correctly and safely?
 
-**Next Action**
+**Next action:** Define measurable criteria covering task completion, code correctness, test results, security, tool usage, and final-report quality.
 
-Continue with documentation, local tests, and code review. Resume API-based testing when the quota permits.
+### 4.6 Human Approval and Guardrails
 
-**Status**
+**Current understanding:** Duplicate-call prevention and iteration limits provide initial programmatic guardrails.
 
-Temporarily blocked.
+**Open question:** Which operations should require explicit human approval?
 
----
+**Next action:** Define approval boundaries for sensitive commands, important file changes, external actions, Git operations, and deployments.
 
-### B-002 — Tool Execution Error Handling
+### 4.7 RAG and Persistent Memory
 
-**Problem**
+**Current understanding:** Basic in-memory state exists. Persistent memory and retrieval-augmented generation have not been implemented.
 
-Tool failures need a consistent handling strategy so that errors can be returned to the model without unexpectedly terminating the agent run.
+**Open question:** Which information needs to persist across tasks, and which project documentation or technical sources need retrieval?
 
-**Impact**
-
-An unhandled tool error could interrupt an engineering task before the agent produces a useful result.
-
-**Next Action**
-
-Implement and test structured error handling around tool execution.
-
-**Status**
-
-Open.
+**Next action:** Establish requirements and evaluate practical options before choosing a storage or retrieval architecture.
 
 ---
 
-### B-003 — Filesystem Access Validation
+## 5. Architecture Decisions Reflected in the Implementation
 
-**Problem**
+The current implementation reflects several established decisions:
 
-File-reading and other codebase tools must not allow unintended access outside the permitted project directory.
+1. **Custom agent loop:** Core agent mechanics are implemented directly to make tool execution and state management easier to understand and test.
+2. **Provider abstraction:** The agent uses an adapter interface to separate core logic from model-provider details.
+3. **Logical agent roles:** Specialized responsibilities are defined without requiring every role to become a separate model-backed agent immediately.
+4. **Programmatic guardrails:** Duplicate-call detection and iteration limits are enforced by code rather than relying only on model instructions.
+5. **Mock-first testing:** Core behavior can be tested without consuming live model API quota.
+6. **Bounded review and revision:** Rejected proposals can be revised, with a configured maximum number of revisions.
 
-**Impact**
-
-An engineering agent with filesystem access needs clear boundaries before more powerful tools are introduced.
-
-**Next Action**
-
-Review and validate path handling in `read_file`, `list_files`, and `search_code`. Add tests for invalid paths and attempts to access files outside the project.
-
-**Status**
-
-Open.
+These decisions will be reviewed as implementation evidence and requirements evolve.
 
 ---
 
-### B-004 — Task-Specific Iteration Limits
+## 6. Next Actions
 
-**Problem**
+### Immediate priorities
 
-The model did not consistently respect the requested lower iteration budget supplied through the prompt.
+1. Update the README to reflect the current implementation and testing status.
+2. Commit the completed and tested work with clear commit messages.
+3. Document architecture decisions, known limitations, and the Gemini quota constraint.
+4. Validate filesystem boundaries and tool arguments.
+5. Implement the remaining LLM-backed agent roles.
+6. Integrate the roles into a mock-tested end-to-end orchestration flow.
 
-**Impact**
+### Subsequent priorities
 
-The agent may use more tool calls and API requests than intended.
-
-**Next Action**
-
-Enforce the applicable iteration budget in application code and determine how the agent should report partial findings when the limit is reached.
-
-**Status**
-
-Open.
-
----
-
-### B-005 — Automated Tests for Duplicate Tool Calls
-
-**Problem**
-
-Duplicate-call detection has passed a manual smoke test, but a repeatable automated regression test has not yet been confirmed.
-
-**Impact**
-
-Future changes could accidentally reintroduce repeated tool execution.
-
-**Next Action**
-
-Add deterministic tests for first-time execution, duplicate detection, and calls with different arguments.
-
-**Status**
-
-Open.
+7. Define persistent-memory requirements.
+8. Establish task-level evaluation criteria and safety boundaries.
+9. Design the first MCP integration.
+10. Investigate safe code execution and controlled GitHub operations.
+11. Resume live-model testing when the Gemini quota permits.
 
 ---
 
-## Original Architecture Questions
+## 7. Current Project Assessment
 
-The questions below remain part of the project's architecture record. Their status should change as implementation and research provide evidence for a decision.
+The project has progressed beyond architecture planning. The core runner, basic memory, orchestration logic, revision loop, and planner validation have been implemented and tested.
 
-### 1. Agent Architecture
+The main remaining challenge is integrating these components into a reliable end-to-end engineering workflow while maintaining security boundaries, predictable execution, and useful evaluation.
 
-**Question**
+**Current focus:** Complete the implementation of the agent roles, validate the full orchestration flow with mock adapters, document the engineering decisions, and address the remaining security and reliability gaps.
 
-Should the complete system use a single agent with multiple tools, multiple specialized agents, a graph-based workflow, or a hybrid approach?
+The project's guiding principle remains:
 
-**Current Understanding**
-
-The initial implementation uses a single agent loop with codebase-inspection tools. This does not settle the architecture for future specialized roles.
-
-**Status**
-
-Initial approach selected; future architecture remains open.
-
----
-
-### 2. Orchestration
-
-**Question**
-
-Should orchestration use LangGraph, CrewAI, custom orchestration, or another approach?
-
-**Current Understanding**
-
-A custom loop is being used for the initial implementation so that the core mechanics can be understood directly.
-
-**Status**
-
-Custom loop selected for the current implementation; future framework adoption remains open.
-
----
-
-### 3. LLM Provider
-
-**Question**
-
-Which LLM providers should supply the reasoning capability?
-
-**Current Understanding**
-
-Gemini is currently in use. Adapter files for Gemini, OpenAI, and Groq exist, but the alternative adapters have not yet been fully verified.
-
-**Status**
-
-Gemini in use; multi-provider validation pending.
-
----
-
-### 4. Programming Language
-
-**Question**
-
-Should the project primarily use Node.js, Python, or a hybrid architecture?
-
-**Current Understanding**
-
-The current agent implementation uses TypeScript and Node.js.
-
-**Status**
-
-TypeScript/Node.js selected for the current implementation; future hybrid requirements remain open.
-
----
-
-### 5. Tool Calling
-
-**Question**
-
-Should tools be implemented through native model tool calling, MCP, a custom tool interface, or a combination?
-
-**Current Understanding**
-
-The current implementation uses model tool calling and application-defined tools.
-
-**Status**
-
-Initial approach implemented; MCP integration remains open.
-
----
-
-### 6. MCP
-
-**Question**
-
-What role should MCP play in providing standardized access to tools, resources, and external systems?
-
-**Status**
-
-Open — research required.
-
----
-
-### 7. Code Execution
-
-**Question**
-
-How can the agent safely execute code and commands?
-
-**Important Considerations**
-
-- Sandboxing.
-- Permissions.
-- Resource limits.
-- Network access.
-- Filesystem access.
-- Command restrictions.
-
-**Current Understanding**
-
-The current toolset supports codebase inspection. Safe execution of arbitrary code and commands has not been established.
-
-**Status**
-
-Open — research required before introducing broader execution capabilities.
-
----
-
-### 8. GitHub Integration
-
-**Question**
-
-How should the agent interact with repositories?
-
-Potential capabilities include:
-
-- Read repository.
-- Inspect files.
-- Create changes.
-- Review diffs.
-- Create branches.
-- Commit changes.
-- Create pull requests.
-
-**Status**
-
-Open — future capability; implementation approach not yet determined.
-
----
-
-### 9. Memory
-
-**Question**
-
-What information needs to persist between agent steps or tasks?
-
-**Status**
-
-Open — research required.
-
----
-
-### 10. RAG
-
-**Question**
-
-Does the agent require retrieval-augmented generation for project documentation, framework documentation, technical references, or repository knowledge?
-
-**Status**
-
-Open — research required.
-
----
-
-### 11. Human-in-the-Loop
-
-**Question**
-
-Which actions should require human approval?
-
-Potential examples include sensitive commands, important file modifications, external API actions, Git operations, and deployments.
-
-**Status**
-
-Open — approval boundaries not yet defined.
-
----
-
-### 12. Evaluation
-
-**Question**
-
-How will we determine whether the agent has successfully completed an engineering task?
-
-Potential evaluation areas include:
-
-- Task completion.
-- Code correctness.
-- Test results.
-- Security.
-- Efficiency.
-- Tool usage.
-- Final output quality.
-
-**Status**
-
-Open — evaluation strategy and automated tests need further definition.
-
----
-
-### 13. Guardrails
-
-**Question**
-
-How do we prevent unsafe or unintended behavior?
-
-**Current Understanding**
-
-Duplicate tool-call detection has been implemented and manually tested. Other guardrails, including filesystem validation, tool-error handling, and reliable iteration limits, remain in progress or pending.
-
-**Status**
-
-Partially implemented; further validation required.
-
----
-
-### 14. Observability
-
-**Question**
-
-How will we inspect agent decisions, tool calls, tool results, errors, retries, state transitions, and final outcomes?
-
-**Status**
-
-Open — the observability approach has not yet been fully defined.
-
----
-
-## Current Blocker Summary
-
-```text
-Core Agent Loop:
-Implemented
-
-Codebase Inspection Tools:
-Implemented; validation pending
-
-Duplicate Tool-Call Detection:
-Manual smoke test passed
-
-Automated Regression Tests:
-Pending
-
-Tool Error Handling:
-Pending validation
-
-Filesystem Security:
-Validation required
-
-Iteration Limits:
-Code-level limit exists; task-specific enforcement needs work
-
-LLM Provider:
-Gemini currently in use
-
-API Quota:
-Temporary development constraint
-
-Architecture Questions:
-Partially resolved; several remain open
-
-Current Phase:
-Week 2 — Reliability, Guardrails, and Testing
-```
-
-## Next Actions
-
-1. Complete tool-error handling.
-2. Validate filesystem path restrictions and tool arguments.
-3. Enforce and test iteration-limit behavior.
-4. Add automated tests for duplicate tool calls.
-5. Run the available build and test checks.
-6. Review the final code changes and update the project documentation.
-7. Resume model-based testing when Gemini quota is available.
-
-These actions will help establish a more reliable foundation before adding more advanced capabilities such as code execution, memory, RAG, MCP integration, and multi-agent orchestration.
-
+> Build it. Break it. Learn it. Ship it.

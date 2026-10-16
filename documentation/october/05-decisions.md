@@ -4,11 +4,13 @@
 
 ### Decision 001 — Establish Dedicated Q4 Repository Structure
 
+**Decision**
+
 We created a dedicated repository structure for the Q4 AI Engineering Journey.
 
 The three major projects will remain separated while sharing a common documentation structure.
 
-### Structure
+**Structure**
 
 ```text
 Q4-AI-Engineering-Journey/
@@ -21,21 +23,21 @@ Q4-AI-Engineering-Journey/
     └── december/
 ```
 
-### Status
-
-Accepted
+**Status:** Accepted
 
 ---
 
-# October 3, 2026
+## October 3, 2026
 
-## Decision 002 — Architecture Before Implementation
+### Decision 002 — Architecture Before Implementation
+
+**Decision**
 
 We will define and document the logical architecture of the Autonomous Engineering Agent before committing to a final implementation framework.
 
-### Reason
+**Reason**
 
-The project involves multiple concepts including:
+The project involves multiple concepts, including:
 
 - Agent orchestration
 - Tool calling
@@ -50,80 +52,85 @@ The project involves multiple concepts including:
 
 The architecture should be understood before implementation decisions are finalized.
 
-### Status
-
-Accepted
+**Status:** Accepted
 
 ---
 
-## Decision 003 — Logical Roles Before Physical Agents
+### Decision 003 — Logical Roles Before Physical Agents
+
+**Decision**
 
 Planner, Researcher, Coder, Tester, Security Reviewer, and Final Reviewer will initially be treated as logical responsibilities.
 
 We will not assume that every responsibility must become a separate AI agent.
 
-### Reason
+**Reason**
 
 The implementation architecture should be selected based on actual requirements rather than forcing a multi-agent architecture unnecessarily.
 
-### Status
-
-Accepted
+**Status:** Accepted
 
 ---
 
-## Decision 004 — Controlled Autonomy
+### Decision 004 — Controlled Autonomy
+
+**Decision**
 
 The system will be designed around controlled autonomy rather than unrestricted machine access.
 
-### Reason
+**Reason**
 
 An engineering agent may eventually be capable of reading files, modifying code, executing commands, and interacting with external systems.
 
 These capabilities require security boundaries and observability.
 
-### Status
-
-Accepted
+**Status:** Accepted
 
 ---
 
-## Decision 005 — Documentation as Part of Engineering
+### Decision 005 — Documentation as Part of Engineering
+
+**Decision**
 
 Architectural decisions, failures, blockers, and lessons learned will be documented throughout development.
 
-### Reason
+**Reason**
 
 The Q4 Journey is both an engineering project and a build-in-public documentation project.
 
-### Status
+**Status:** Accepted
 
-Accepted
+---
 
-Decision 006 — Provider-Agnostic LLM Architecture
+## October 8, 2026
 
-Date: October 8, 2026
+### Decision 006 — Provider-Agnostic LLM Architecture
 
-Decision:
-The Autonomous Engineering Agent will use a provider-agnostic
-LLM adapter layer instead of coupling the agent directly to a
-single model provider.
+**Decision**
 
-Initial providers:
+The Autonomous Engineering Agent will use a provider-agnostic LLM adapter layer instead of coupling the core agent directly to a single model provider.
+
+**Initial provider plans**
+
 - Gemini
 - OpenAI
 - Groq
 
-Reason:
-The agent's reasoning loop, tool execution, state management,
-and safety controls should remain independent of the underlying
-LLM provider.
+**Reason**
 
-This allows providers to be changed or compared without
-rewriting the core agent architecture.
+The agent's reasoning loop, tool execution, state management, and safety controls should remain independent of the underlying LLM provider.
 
-Status:
-Proposed → validate through implementation
+This architecture allows providers to be changed or compared without rewriting the core agent architecture.
+
+**Implementation Notes**
+
+- A shared LLM adapter interface has been implemented.
+- Gemini and mock adapters are available.
+- The mock adapter supports testing without depending on live model availability.
+- OpenAI and Groq adapters have not yet been confirmed as implemented.
+- Live Gemini validation has been affected by API quota errors.
+
+**Status:** Adapter architecture implemented; additional providers and live-provider validation remain outstanding.
 
 ---
 
@@ -145,14 +152,13 @@ It also allows us to identify limitations and reliability issues before introduc
 
 **Implementation Notes**
 
-- The agent loop is implemented in `src/agent.ts`.
-- Gemini is the current model provider.
-- The agent can interact with the codebase through tools such as `list_files`, `read_file`, and `search_code`.
-- The current implementation uses an iteration limit to bound the agent loop.
+- The agent runner is implemented in `src/agentRunner.ts`.
+- Gemini is available as a model provider, alongside the mock adapter used for deterministic tests.
+- The available tools include `list_files`, `read_file`, and `search_code`.
+- The runner enforces an iteration limit and tracks execution outcomes.
+- Provider state is preserved between model interactions where supported by the adapter.
 
-**Status**
-
-Accepted — implementation in progress.
+**Status:** Core agent runner implemented and covered by automated tests.
 
 ---
 
@@ -175,17 +181,13 @@ The duplicate-call guard provides a deterministic safeguard instead of relying e
 - Tool-call arguments are normalized before generating a comparison key.
 - Previously executed tool-call keys are tracked during the agent run.
 - Duplicate calls are skipped and reported to the agent.
-- A manual smoke test confirmed that the first search executed and the repeated search was skipped.
+- Automated tests cover duplicate-call behavior.
 
 **Limitations**
 
 The current implementation detects identical tool names and normalized arguments. It does not detect every possible form of repetitive behavior, such as different searches that produce the same result.
 
-An automated regression test is still required.
-
-**Status**
-
-Implemented — manual smoke test passed; automated regression testing pending.
+**Status:** Implemented and covered by automated tests.
 
 ---
 
@@ -201,12 +203,104 @@ During testing, the model continued making tool calls beyond the requested task-
 
 **Implementation Notes**
 
-- The agent currently has a code-level maximum iteration setting.
-- Task-specific iteration budgets need to be enforced explicitly if they differ from the global maximum.
-- Error handling, argument validation, and filesystem access restrictions remain part of the ongoing reliability and safety work.
+- The agent runner enforces a code-level maximum iteration limit.
+- Automated tests cover iteration-limit behavior.
+- Tool errors are handled by the runner so the workflow can respond to failures.
+- Task-specific iteration budgets remain a separate requirement.
+- Tool argument validation and filesystem access restrictions remain part of the ongoing reliability and safety work.
 
-**Status**
-
-Accepted — further implementation and testing required.
+**Status:** Core iteration guard implemented and tested; additional guardrails remain outstanding.
 
 ---
+
+## October 16, 2026
+
+### Decision 010 — Use Mock Adapters for Deterministic Testing
+
+**Decision**
+
+The agent's core behavior must be testable without requiring successful responses from a live LLM provider.
+
+Mock adapters and controlled test doubles will be used to validate agent behavior, orchestration logic, error handling, and other deterministic components.
+
+**Reason**
+
+Live model calls can be affected by API quotas, provider availability, network errors, and nondeterministic model responses.
+
+Testing core application logic independently makes failures easier to reproduce and reduces dependence on external services.
+
+**Implementation Notes**
+
+- A mock LLM adapter is available.
+- Automated tests use controlled responses to verify agent-runner behavior.
+- Planner tests use test adapters that return controlled planning responses.
+- Live Gemini validation remains separate from deterministic unit testing.
+
+**Status:** Implemented and used in automated testing.
+
+---
+
+### Decision 011 — Coordinate Agent Roles Through an Explicit Orchestration Layer
+
+**Decision**
+
+The system will use an explicit orchestration layer to coordinate logical agent responsibilities and control the order in which they execute.
+
+The initial workflow coordinates planning, research, coding, and review. It supports a bounded revision cycle when a review rejects a proposed result.
+
+**Reason**
+
+Explicit orchestration makes the workflow easier to test, understand, and control. A bounded revision cycle also prevents rejected work from triggering an unlimited review-and-revision loop.
+
+**Implementation Notes**
+
+- Orchestration interfaces are defined in `src/orchestration/types.ts`.
+- The orchestration flow is implemented in `src/orchestration/orchestrator.ts`.
+- The workflow validates task input and planning output.
+- Review feedback can be passed into a subsequent coding attempt.
+- The number of revision attempts is bounded.
+- Automated tests cover role ordering, invalid input, review rejection, revision, approval, and revision limits.
+
+**Limitations**
+
+The orchestration structure and revision logic have been tested, but the complete LLM-backed Researcher, Coder, and Reviewer workflow has not yet been verified end to end.
+
+**Status:** Orchestration structure implemented and tested; complete role integration remains in progress.
+
+---
+
+### Decision 012 — Validate Planner Output Before Orchestration
+
+**Decision**
+
+The planner must return a valid structured plan before the orchestration workflow proceeds.
+
+For the initial implementation, the planner response must be valid JSON containing a non-empty array of non-empty string steps. Unexpected tool calls from the planner are rejected.
+
+**Reason**
+
+Downstream orchestration depends on predictable planning output. Invalid or incomplete plans should be rejected explicitly rather than passed to later stages.
+
+**Implementation Notes**
+
+- The LLM-backed planner implementation is in `src/orchestration/llmPlanner.ts`.
+- The planner uses the shared LLM adapter interface.
+- JSON parsing and basic plan validation are implemented.
+- Automated tests cover valid plans, invalid JSON, empty plans, unexpected tool calls, and blank task input.
+
+**Status:** Implemented and covered by automated tests.
+
+---
+
+## Review Policy
+
+Architecture decisions should be updated when implementation evidence changes their status or reveals a limitation.
+
+Each decision should distinguish between:
+
+- **Accepted:** The architectural direction has been agreed upon.
+- **Implemented:** The corresponding functionality has been built.
+- **Tested:** Relevant automated or manual verification has been completed.
+- **Proposed:** The approach is under consideration and has not yet been validated sufficiently.
+
+A decision being accepted does not mean the related functionality is fully implemented. Future changes should be documented without overstating the current capabilities of the system.
