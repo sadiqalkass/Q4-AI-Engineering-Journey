@@ -1,7 +1,7 @@
-
 import { GeminiAdapter } from "./gemini.js";
+import { GroqAdapter } from "./groq.js";
 import { MockAdapter } from "./mock.js";
-import { LLMAdapter } from "./types.js";
+import type { LLMAdapter } from "./types.js";
 
 export function createLLMAdapter(): LLMAdapter {
   const provider = (
@@ -12,13 +12,16 @@ export function createLLMAdapter(): LLMAdapter {
     case "gemini":
       return new GeminiAdapter();
 
+    case "groq":
+      return new GroqAdapter();
+
     case "mock":
       return new MockAdapter();
 
     default:
       throw new Error(
         `Unsupported LLM_PROVIDER "${provider}". ` +
-          "Supported providers: gemini, mock."
+          "Supported providers: gemini, groq, mock.",
       );
   }
 }

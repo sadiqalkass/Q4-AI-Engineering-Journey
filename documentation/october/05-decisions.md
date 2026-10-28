@@ -304,3 +304,107 @@ Each decision should distinguish between:
 - **Proposed:** The approach is under consideration and has not yet been validated sufficiently.
 
 A decision being accepted does not mean the related functionality is fully implemented. Future changes should be documented without overstating the current capabilities of the system.
+
+## October 23, 2026
+
+### Decision 013 — Require Structured Coding Proposals
+
+**Decision**
+
+The LLM-backed Coder must return a structured JSON response containing a proposal and an optional list of file changes.
+
+Each file change specifies a project-relative path, complete file content, and an overwrite flag.
+
+**Reason**
+
+Structured output allows the application to validate proposed changes before they reach the file-writing stage.
+
+**Implementation Notes**
+
+- The Coder validates the model response.
+- File paths must be project-relative.
+- The Coder must not request overwriting existing files.
+- Invalid structured responses are rejected.
+
+**Status:** Implemented; automated tests cover the Coder response validation.
+
+### Decision 014 — Protect Existing Files by Default
+
+**Decision**
+
+The `write_code` tool creates new files by default and refuses to overwrite existing files unless overwrite permission is explicitly supplied.
+
+The orchestration change-application layer currently rejects overwrite requests.
+
+**Reason**
+
+Generated code must not silently destroy existing project files.
+
+**Implementation Notes**
+
+- Project-root path validation is implemented.
+- Writing through symbolic links is prohibited.
+- Existing files are protected by default.
+- File updates use a temporary sibling file and rename.
+- Parent directories must already exist.
+
+**Limitations**
+
+Applying several changes is not transactional. If a later write fails, earlier writes may remain applied.
+
+**Status:** Implemented and covered by automated tests; batch rollback remains outstanding.
+
+### Decision 015 — Apply Changes Only After Review Approval
+
+**Decision**
+
+The orchestrator applies proposed file changes only when the final review approves the coding result.
+
+Rejected results must not be applied. Approved results with no proposed changes must not invoke the change applier.
+
+**Reason**
+
+Review approval is a necessary checkpoint before proposed code is written to disk.
+
+**Implementation Notes**
+
+- Review and revision are handled by the orchestration layer.
+- Revision attempts are bounded.
+- Tests cover approved, rejected, and empty-change outcomes.
+- The default change applier uses the guarded `write_code` tool.
+
+**Limitations**
+
+Approval is not proof of correctness. The complete workflow still needs end-to-end integration and independent test execution.
+
+**Status:** Implemented and covered by orchestration tests.
+
+### Decision 016 — Integrate MCP Through a Namespaced Tool Registry
+
+**Decision**
+
+MCP tools are discovered and registered through a dedicated client and tool registry. External tool names are namespaced when exposed to the agent.
+
+**Reason**
+
+Namespacing reduces collisions between local tools and tools provided by external MCP servers.
+
+**Implementation Notes**
+
+- An MCP client and test server are implemented.
+- The registry handles tool discovery and routing.
+- Tests cover namespacing, routing, unknown tools, and registration edge cases.
+
+**Limitations**
+
+The test-server integration does not establish production readiness for arbitrary external MCP servers.
+
+**Status:** Implemented and covered by automated tests.
+
+---
+
+## Decision Review — October 23, 2026
+
+The current implementation favors explicit interfaces, structured model responses, programmatic safeguards, deterministic testing, and bounded orchestration.
+
+The next review should prioritize end-to-end integration, independent verification of generated changes, and safe handling of partial failures.

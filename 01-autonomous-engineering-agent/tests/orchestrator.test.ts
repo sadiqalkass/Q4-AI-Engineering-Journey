@@ -263,3 +263,139 @@ test("stops when the revision limit is reached", async () => {
     "Unresolved issue",
   ]);
 });
+
+
+test("rejects an invalid revision limit", () => {
+  const agents = createAgents([]);
+
+  agents.maxRevisions = -1;
+
+  assert.throws(
+    () => new Orchestrator(agents),
+    /non-negative integer/
+  );
+});
+
+test("propagates planner errors and stops orchestration", async () => {
+  const events: string[] = [];
+  const agents = createAgents(events);
+
+  agents.planner = {
+    async run() {
+      events.push("planner");
+      throw new Error("Planner service unavailable.");
+    },
+  };
+
+  const orchestrator = new Orchestrator(agents);
+
+  await assert.rejects(
+    () => orchestrator.run("Add input validation"),
+    /Planner service unavailable/
+  );
+
+  assert.deepEqual(events, ["planner"]);
+});
+
+test("applies changes only after the reviewer approves", async () => {
+  const events: string[] = [];
+  const agents = createAgents(events);
+
+  agents.coder = {
+    async run() {
+      return {
+        proposal: "Create a validation helper.",
+        changes: [
+          {
+            path: "src/validation-helper.ts",
+            content: "export const valid = true;\n",
+          },
+        ],
+      };
+    },
+  };
+
+  agents.applyChanges = async (changes) => {
+    events.push("applyChanges");
+    assert.equal(changes.length, 1);
+    assert.equal(changes[0].path, "src/validation-helper.ts");
+    return [{ success: true }];
+  };
+
+  const result = await new Orchestrator(agents).run(
+    "Add input validation",
+  );
+
+  assert.equal(result.review.approved, true);
+  assert.equal(events.at(-1), "applyChanges");
+});
+
+test("never applies changes when the final review rejects them", async () => {
+  const events: string[] = [];
+  const agents = createAgents(events);
+  let applyCalls = 0;
+
+  agents.maxRevisions = 1;
+
+  agents.coder = {
+    async run() {
+      return {
+        proposal: "Proposed validation helper.",
+        changes: [
+          {
+            path: "src/validation-helper.ts",
+            content: "export const valid = true;\n",
+          },
+        ],
+      };
+    },
+  };
+
+  agents.reviewer = {
+    async run() {
+      return {
+        approved: false,
+        feedback: "Validation is incomplete.",
+        issues: ["Missing edge cases"],
+      };
+    },
+  };
+
+  agents.applyChanges = async () => {
+    applyCalls++;
+  };
+
+  const result = await new Orchestrator(agents).run(
+    "Add input validation",
+  );
+
+  assert.equal(result.review.approved, false);
+  assert.equal(result.revisionCount, 1);
+  assert.equal(applyCalls, 0);
+});
+
+test("does not invoke the applier when approved coding has no changes", async () => {
+  const agents = createAgents([]);
+  let applyCalls = 0;
+
+  agents.coder = {
+    async run() {
+      return {
+        proposal: "No file changes are required.",
+        changes: [],
+      };
+    },
+  };
+
+  agents.applyChanges = async () => {
+    applyCalls++;
+  };
+
+  const result = await new Orchestrator(agents).run(
+    "Add input validation",
+  );
+
+  assert.equal(result.review.approved, true);
+  assert.equal(applyCalls, 1);
+});
+

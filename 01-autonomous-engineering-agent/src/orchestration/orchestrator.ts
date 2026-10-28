@@ -1,12 +1,13 @@
-
 import type {
   CoderAgent,
+  CodeChange,
   OrchestrationResult,
   PlannerAgent,
   ResearcherAgent,
   ReviewerAgent,
   RevisionContext,
 } from "./types.js";
+import { applyChanges as applyApprovedChanges } from "./applyChanges.js";
 
 export interface OrchestratorDependencies {
   planner: PlannerAgent;
@@ -14,13 +15,20 @@ export interface OrchestratorDependencies {
   coder: CoderAgent;
   reviewer: ReviewerAgent;
   maxRevisions?: number;
+
+  // Optional: connect the safe file-writing layer here.
+  // No changes are written unless this callback is provided
+  // and the reviewer approves the final result.
+  applyChanges?: (
+    changes: CodeChange[],
+  ) => Promise<unknown>;
 }
 
 export class Orchestrator {
   private readonly maxRevisions: number;
 
   constructor(
-    private readonly agents: OrchestratorDependencies
+    private readonly agents: OrchestratorDependencies,
   ) {
     this.maxRevisions = agents.maxRevisions ?? 2;
 
@@ -29,7 +37,7 @@ export class Orchestrator {
       this.maxRevisions < 0
     ) {
       throw new Error(
-        "maxRevisions must be a non-negative integer."
+        "maxRevisions must be a non-negative integer.",
       );
     }
   }
@@ -47,20 +55,20 @@ export class Orchestrator {
 
     const research = await this.agents.researcher.run(
       task,
-      plan
+      plan,
     );
 
     let coding = await this.agents.coder.run(
       task,
       plan,
-      research
+      research,
     );
 
     let review = await this.agents.reviewer.run(
       task,
       plan,
       research,
-      coding
+      coding,
     );
 
     let revisionCount = 0;
@@ -82,15 +90,26 @@ export class Orchestrator {
         task,
         plan,
         research,
-        revision
+        revision,
       );
 
       review = await this.agents.reviewer.run(
         task,
         plan,
         research,
-        coding
+        coding,
       );
+    }
+
+    // Never apply changes if the final review rejects them.
+    if (review.approved) {
+      const changes = coding.changes ?? [];
+
+      if (this.agents.applyChanges) {
+        await this.agents.applyChanges(changes);
+      } else if (changes.length > 0) {
+        await applyApprovedChanges(changes);
+      }
     }
 
     return {

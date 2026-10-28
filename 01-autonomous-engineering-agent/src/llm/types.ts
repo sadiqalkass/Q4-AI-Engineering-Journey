@@ -1,8 +1,5 @@
 
-export type ToolName =
-  | "list_files"
-  | "read_file"
-  | "search_code";
+export type ToolName = string;
 
 export interface ToolCall {
   id: string;

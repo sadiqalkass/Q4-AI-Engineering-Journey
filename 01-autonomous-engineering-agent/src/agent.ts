@@ -1,26 +1,27 @@
 import "dotenv/config";
 
 import { createLLMAdapter } from "./llm/index.js";
-import { ToolDefinition } from "./llm/types.js";
+import type { ToolDefinition } from "./llm/types.js";
 import { listFiles } from "./tools/listFiles.js";
 import { readFile } from "./tools/readFile.js";
 import { searchCode } from "./tools/searchCode.js";
+import { writeCode } from "./tools/writeCode.js";
 import { runAgent } from "./agentRunner.js";
+import { MCPClient } from "./mcp/mcpClient.js";
+import { MCPToolRegistry } from "./mcp/mcpToolRegistry.js";
 
 const adapter = createLLMAdapter();
 
-const toolDefinitions: ToolDefinition[] = [
+const builtInToolDefinitions: ToolDefinition[] = [
   {
     name: "list_files",
-    description:
-      "List files and directories inside a specified directory.",
+    description: "List files and directories inside a specified directory.",
     parameters: {
       type: "object",
       properties: {
         directory: {
           type: "string",
-          description:
-            "The directory to inspect. Use '.' for the current project.",
+          description: "The directory to inspect. Use '.' for the current project.",
         },
       },
       required: ["directory"],
@@ -29,8 +30,7 @@ const toolDefinitions: ToolDefinition[] = [
   },
   {
     name: "read_file",
-    description:
-      "Read the contents of a specific text file.",
+    description: "Read the contents of a specific text file.",
     parameters: {
       type: "object",
       properties: {
@@ -59,157 +59,128 @@ const toolDefinitions: ToolDefinition[] = [
       additionalProperties: false,
     },
   },
+  
+  {
+    name: "write_code",
+    description:
+      "Create a new file or update an existing project file. Existing files cannot be overwritten unless overwrite is explicitly true. Use only paths inside the project directory.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "Relative path of the file inside the project.",
+        },
+        content: {
+          type: "string",
+          description: "Complete content to write to the file.",
+        },
+        overwrite: {
+          type: "boolean",
+          description:
+            "Set true only when intentionally replacing an existing file.",
+        },
+      },
+      required: ["path", "content"],
+      additionalProperties: false,
+    },
+  },
 ];
 
-async function executeTool(
-  name: string,
-  args: Record<string, unknown>
-) {
-  switch (name) {
-    case "list_files":
-      return listFiles(String(args.directory ?? "."));
+async function main(): Promise<void> {
+  const mcpClient = new MCPClient({
+    name: "q4-autonomous-engineering-agent",
+    version: "1.0.0",
+    command: process.execPath,
+    args: ["--import", "tsx", "src/mcp/testServer.ts"],
+    cwd: process.cwd(),
+  });
 
-    case "read_file":
-      return readFile(String(args.filePath));
+  try {
+    console.log("Connecting to MCP server...");
+    await mcpClient.connect();
 
-    case "search_code":
-      return searchCode(String(args.query ?? ""));
+    const registry = new MCPToolRegistry();
 
-    default:
-      throw new Error(`Unknown tool: ${name}`);
+    const mcpToolDefinitions = await registry.registerClient(
+      "q4-test",
+      mcpClient,
+    );
+
+    const toolDefinitions: ToolDefinition[] = [
+      ...builtInToolDefinitions,
+      ...mcpToolDefinitions,
+    ];
+
+    console.log("MCP connection established.");
+    console.log("Discovered MCP tools:", registry.getToolNames());
+
+    const executeTool = async (
+      name: string,
+      args: Record<string, unknown>,
+    ): Promise<unknown> => {
+      switch (name) {
+        case "list_files":
+          return listFiles(String(args.directory ?? "."));
+
+        case "read_file":
+          if (typeof args.filePath !== "string" || !args.filePath.trim()) {
+            throw new Error("filePath must be a non-empty string.");
+          }
+          return readFile(args.filePath);
+
+        case "search_code":
+          if (typeof args.query !== "string" || !args.query.trim()) {
+            throw new Error("query must be a non-empty string.");
+          }
+          return searchCode(args.query);
+          
+        case "write_code":
+          if (typeof args.path !== "string" || !args.path.trim()) {
+            throw new Error("path must be a non-empty string.");
+          }
+
+          if (typeof args.content !== "string") {
+            throw new Error("content must be a string.");
+          }
+
+          if (
+            args.overwrite !== undefined &&
+            typeof args.overwrite !== "boolean"
+          ) {
+            throw new Error("overwrite must be a boolean.");
+          }
+
+          return writeCode({
+            path: args.path,
+            content: args.content,
+            overwrite: args.overwrite as boolean | undefined,
+          });
+        default:
+          return registry.callTool(name, args);
+      }
+    };
+
+    await runAgent(
+      `Test the integrated agent tools.
+      1. Call mcp_q4_test_hello_mcp with name "Sadiq".
+      2. Call search_code with query "jwt".
+      3. Call search_code again with the exact same arguments.
+      4. Explain the MCP result and whether the duplicate search was skipped.`,
+      adapter,
+      toolDefinitions,
+      executeTool,
+    );
+  } finally {
+    await mcpClient.close();
+    console.log("MCP connection closed.");
   }
 }
 
-
-// function getToolCallKey(
-//   name: string,
-//   args: Record<string, unknown>
-// ): string {
-//   const normalizedArgs = Object.fromEntries(
-//     Object.entries(args).sort(([a], [b]) => a.localeCompare(b))
-//   );
-
-//   return `${name}:${JSON.stringify(normalizedArgs)}`;
-// }
-
-
-// async function runAgent(task: string) {
-//   let input: unknown = task;
-//   let providerState: unknown;
-
-//   const maxIterations = 8;
-//   const seenToolCalls = new Set<string>();
-
-//   for (let iteration = 0; iteration < maxIterations; iteration++) {
-//     console.log(`\n--- Agent iteration ${iteration + 1} ---`);
-
-//     const response = await adapter.generate(
-//       input,
-//       toolDefinitions,
-//       providerState
-//     );
-
-//     providerState = response.providerState;
-
-//     if (response.toolCalls.length === 0) {
-//       console.log("\nAgent:\n");
-//       console.log(response.text);
-//       return;
-//     }
-
-//     const functionResults = [];
-
-//     for (const toolCall of response.toolCalls) {
-//       console.log("\nTool call:");
-//       console.log(toolCall.name);
-//       console.log(toolCall.arguments);
-
-//       const callKey = getToolCallKey(
-//         toolCall.name,
-//         toolCall.arguments
-//       );
-
-//       let result: unknown;
-
-//       if (seenToolCalls.has(callKey)) {
-//         console.warn(
-//           "\nDuplicate tool call detected. Skipping execution."
-//         );
-
-//         result = {
-//           error:
-//             "Duplicate tool call detected. This exact tool call has already been executed.",
-//           suggestion:
-//             "Use previous results or try a different search query.",
-//         };
-//       } else {
-//         seenToolCalls.add(callKey);
-
-//         try {
-//           result = await executeTool(
-//             toolCall.name,
-//             toolCall.arguments
-//           );
-//         } catch (error) {
-//           const message =
-//             error instanceof Error
-//               ? error.message
-//               : "An unexpected tool error occurred.";
-
-//           console.error(
-//             `Tool "${toolCall.name}" failed:`,
-//             message
-//           );
-
-//           result = {
-//             error: message,
-//             tool: toolCall.name,
-//             suggestion:
-//               "Review the error and try a different approach.",
-//           };
-//         }
-//       }
-
-//       console.log("\nTool result:");
-//       console.log(result);
-
-//       functionResults.push({
-//         type: "function_result",
-//         name: toolCall.name,
-//         call_id: toolCall.id,
-//         result: [
-//           {
-//             type: "text",
-//             text: JSON.stringify(result),
-//           },
-//         ],
-//       });
-//     }
-
-//     input = functionResults;
-//   }
-
-//   console.warn(
-//     `Agent reached its maximum of ${maxIterations} iterations.`
-//   );
-
-//   console.warn(
-//     "The task may be incomplete. Review the results before considering it finished."
-//   );
-// }
-
-
-runAgent(
-  `This is a test of duplicate tool-call detection.
-  1. Call search_code with query "jwt".
-  2. Call search_code again with the exact same arguments.
-  3. Do not call any other tools.
-  4. After receiving the results, explain whether the duplicate call was skipped.`,
-  adapter,
-  toolDefinitions,
-  executeTool
-).catch((error) => {
+main().catch((error: unknown) => {
   console.error("\nAgent failed:");
-  console.error(error);
+  console.error(
+    error instanceof Error ? error.message : "Unexpected agent error.",
+  );
+  process.exitCode = 1;
 });
-

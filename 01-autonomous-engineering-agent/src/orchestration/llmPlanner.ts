@@ -1,4 +1,3 @@
-
 import type { LLMAdapter } from "../llm/types.js";
 import type {
   PlannerAgent,
@@ -45,15 +44,17 @@ ${JSON.stringify(task)}
       );
     }
 
-    let parsed: unknown;
+let parsed: unknown;
 
-    try {
-      parsed = JSON.parse(response.text);
-    } catch {
-      throw new Error(
-        "Planner returned invalid JSON."
-      );
-    }
+try {
+  parsed = JSON.parse(response.text);
+} catch {
+  console.error(
+    "Planner raw response:",
+    JSON.stringify(response.text),
+  );
+  throw new Error("Planner returned invalid JSON.");
+}
 
     if (
       typeof parsed !== "object" ||

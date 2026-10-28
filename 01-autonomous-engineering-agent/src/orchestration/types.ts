@@ -7,9 +7,17 @@ export interface ResearchResult {
   findings: string;
 }
 
+export interface CodeChange {
+  path: string;
+  content: string;
+  overwrite?: boolean;
+}
+
 export interface CodingResult {
   proposal: string;
+  changes?: CodeChange[];
 }
+
 
 export interface RevisionContext {
   previousProposal: string;
